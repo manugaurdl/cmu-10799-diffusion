@@ -235,13 +235,28 @@ class CelebADataset(Dataset):
         """Build the preprocessing transforms."""
         transform_list = []
 
-        # TODO: write your image transforms & augmentation
+        # Resize/center-crop only if needed (dataset images are already 64x64)
+        if self.image_size != 64:
+            transform_list.append(
+                transforms.Resize(self.image_size, interpolation=transforms.InterpolationMode.BILINEAR)
+            )
+            transform_list.append(transforms.CenterCrop(self.image_size))
 
-        # Only resize if needed (dataset images are already 64x64)
+        # Light data augmentation for training
+        if self.augment and self.split == "train":
+            transform_list.append(transforms.RandomHorizontalFlip(p=0.5))
+            transform_list.append(
+                transforms.RandomApply(
+                    [transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.02)],
+                    p=0.3,
+                )
+            )
 
-        # For Data augmentation you can do something like
-        # if self.augment and self.split == "train":
-        #     transform_list.append(...)
+        # Convert to tensor and normalize to [-1, 1]
+        transform_list.append(transforms.ToTensor())
+        transform_list.append(
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        )
 
         return transforms.Compose(transform_list)
 

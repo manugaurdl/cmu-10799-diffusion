@@ -15,6 +15,7 @@ dependencies = [
     "einops>=0.6.0",
     "tqdm>=4.64.0",
     "scipy>=1.9.0",
+    "ipdb>=0.13.13",
 ]
 
 [project.optional-dependencies]

@@ -24,6 +24,7 @@ What you need to implement:
 
 import os
 import sys
+import math
 import argparse
 from datetime import datetime
 
@@ -32,7 +33,7 @@ import torch
 from tqdm import tqdm
 
 from src.models import create_model_from_config
-from src.data import save_image
+from src.data import save_image, unnormalize
 from src.methods import DDPM
 from src.utils import EMA
 
@@ -57,6 +58,7 @@ def save_samples(
     samples: torch.Tensor,
     save_path: str,
     num_samples: int,
+    nrow: int | None = None,
 ) -> None:
     """
     TODO: save generated samples as images.
@@ -66,8 +68,16 @@ def save_samples(
         save_path: File path to save the image grid.
         num_samples: Number of samples, used to calculate grid layout.
     """
+    samples = samples.detach().cpu()
+    samples = unnormalize(samples).clamp(0.0, 1.0)
 
-    raise NotImplementedError
+    # Grid layout (e.g., 64 -> 8x8)
+    if nrow is None:
+        nrow = int(math.sqrt(num_samples))
+        if nrow * nrow < num_samples:
+            nrow = math.ceil(num_samples / nrow)
+
+    save_image(samples, save_path, nrow=nrow)
 
 
 def main():
@@ -183,7 +193,7 @@ def main():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             args.output = f"samples_{timestamp}.png"
 
-        save_samples(all_samples, args.output, nrow=8)
+        save_samples(all_samples, args.output, args.num_samples, nrow=8)
         print(f"Saved grid to {args.output}")
     else:
         print(f"Saved {args.num_samples} individual images to {args.output_dir}")

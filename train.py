@@ -237,8 +237,18 @@ def generate_samples(
     if use_ema:
         ema.apply_shadow()
 
-    samples = None
-    # TODO: sample with your method.sample()
+    sampling_cfg = config.get('sampling', {})
+    num_steps = sampling_cfg.get('num_steps', None)
+    sampler = sampling_cfg.get('sampler', method_name)
+    if sampler != method_name:
+        raise ValueError(f"Unsupported sampler '{sampler}' for method '{method_name}'")
+
+    samples = method.sample(
+        batch_size=num_samples,
+        image_shape=image_shape,
+        num_steps=num_steps,
+        **sampling_kwargs,
+    )
 
     if use_ema:
         ema.restore()
@@ -246,22 +256,24 @@ def generate_samples(
     method.train_mode()
     return samples
 
-
 def save_samples(
     samples: torch.Tensor,
     save_path: str,
     num_samples: int,
 ) -> None:
     """
-    TODO: save generated samples as images.
-
-    Args:
-        samples: Generated samples tensor with shape (num_samples, C, H, W).
-        save_path: File path to save the image grid.
-        num_samples: Number of samples, used to calculate grid layout.
+    Save generated samples as an image grid.
     """
+    # Move to CPU and convert range to [0, 1]
+    samples = samples.detach().cpu()
+    samples = unnormalize(samples).clamp(0.0, 1.0)
 
-    raise NotImplementedError
+    # Grid layout (e.g., 64 -> 8x8)
+    nrow = int(math.sqrt(num_samples))
+    if nrow * nrow < num_samples:
+        nrow = math.ceil(num_samples / nrow)
+
+    save_image(samples, save_path, nrow=nrow)
 
 
 def train(
