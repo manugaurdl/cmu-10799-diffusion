@@ -104,7 +104,7 @@ class DDPM(BaseMethod):
 
     def compute_loss(self, x_0: torch.Tensor, **kwargs) -> Tuple[torch.Tensor, Dict[str, float]]:
         """
-        TODO: Implement your DDPM loss function here
+        Computes the DDPM loss (Simple MSE on noise).
 
         Args:
             x_0: Clean data samples of shape (batch_size, channels, height, width)
@@ -112,31 +112,31 @@ class DDPM(BaseMethod):
         
         Returns:
             loss: Scalar loss tensor for backpropagation
-            metrics: Dictionary of metrics for logging (e.g., {'mse': 0.1})
+            metrics: Dictionary of metrics for logging
         """
+        # 1. Sample time steps t uniformly
         batch_size = x_0.shape[0]
-        t = torch.randint(0, self.num_timesteps, (batch_size,), device=x_0.device, dtype=torch.long)
-        
-        # We still generate noise to create x_t, but we don't need it for the loss target
-        x_t, _ = self.forward_process(x_0, t)
-        
-        # CHANGE 1: The model is now parametrized to output the clean image (pred_x0)
-        pred_x0 = self.model(x_t, t)
-        
-        # CHANGE 2: The loss target is the original clean image (x_0)
-        t_max_threshold = int(self.num_timesteps * 0.95)
-        mask = (t < t_max_threshold).float().view(-1, 1, 1, 1)
-        per_elem_loss = F.mse_loss(pred_x0, x_0, reduction="none")
-        masked_loss = per_elem_loss * mask
-        denom = mask.sum() * per_elem_loss[0].numel()
-        loss = masked_loss.sum() / denom
-        
+        t = torch.randint(0, self.num_timesteps, (batch_size,), device=self.device).long()
+
+        # 2. Generate random noise
+        noise = torch.randn_like(x_0)
+
+        # 3. Compute x_t (noisy image) using the forward process
+        # We pass the noise explicitly so we can compare it later
+        x_t, _ = self.forward_process(x_0, t, noise=noise)
+
+        # 4. Predict the noise using the model
+        # Note: In standard DDPM, the model predicts the noise (epsilon), not x_0 directly.
+        noise_pred = self.model(x_t, t)
+
+        # 5. Compute Simple MSE Loss between actual noise and predicted noise
+        loss = F.mse_loss(noise_pred, noise)
+
         metrics = {
-            "loss": loss,
-            "mse": loss,
+            "loss": loss.item(),
+            "mse": loss.item(),
         }
         return loss, metrics
-
     # =========================================================================
     # Reverse process (sampling)
     # =========================================================================
