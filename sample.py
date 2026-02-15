@@ -1,5 +1,5 @@
 """
-Sampling Script for DDPM (Denoising Diffusion Probabilistic Models)
+Sampling Script for Diffusion Models (DDPM & Flow Matching)
 
 Generate samples from a trained model. By default, saves individual images to avoid
 memory issues with large sample counts. Use --grid to generate a single grid image.
@@ -8,18 +8,23 @@ Usage:
     # Sample from DDPM (saves individual images to ./samples/)
     python sample.py --checkpoint checkpoints/ddpm_final.pt --method ddpm --num_samples 64
 
+    # Sample from Flow Matching
+    python sample.py --checkpoint checkpoints/flow_matching_final.pt --method flow_matching --num_samples 64
+
+    # DDIM sampling (faster, deterministic)
+    python sample.py --checkpoint checkpoints/ddpm_final.pt --method ddpm --sampler ddim --num_steps 50
+
+    # DDIM with stochasticity (eta > 0)
+    python sample.py --checkpoint checkpoints/ddpm_final.pt --method ddpm --sampler ddim --num_steps 50 --eta 0.5
+
     # With custom number of sampling steps
     python sample.py --checkpoint checkpoints/ddpm_final.pt --method ddpm --num_steps 500
 
     # Generate a grid image instead of individual images
-    python sample.py --checkpoint checkpoints/ddpm_final.pt --method ddpm --num_samples 64 --grid
+    python sample.py --checkpoint checkpoints/flow_matching_final.pt --method flow_matching --num_samples 64 --grid
 
     # Save individual images to custom directory
     python sample.py --checkpoint checkpoints/ddpm_final.pt --method ddpm --output_dir my_samples
-
-What you need to implement:
-- Incorporate your sampling scheme to this pipeline
-- Save generated samples as images for logging
 """
 
 import os
@@ -34,7 +39,7 @@ from tqdm import tqdm
 
 from src.models import create_model_from_config
 from src.data import save_image, unnormalize
-from src.methods import DDPM
+from src.methods import DDPM, FlowMatching
 from src.utils import EMA
 
 
@@ -85,8 +90,8 @@ def main():
     parser.add_argument('--checkpoint', type=str, required=True,
                        help='Path to model checkpoint')
     parser.add_argument('--method', type=str, required=True,
-                       choices=['ddpm'], # You can add more later
-                       help='Method used for training (currently only ddpm is supported)')
+                       choices=['ddpm', 'flow_matching'],
+                       help='Method used for training: ddpm or flow_matching')
     parser.add_argument('--num_samples', type=int, default=64,
                        help='Number of samples to generate')
     parser.add_argument('--output_dir', type=str, default='samples',
@@ -103,6 +108,11 @@ def main():
     # Sampling arguments
     parser.add_argument('--num_steps', type=int, default=None,
                        help='Number of sampling steps (default: from config)')
+    parser.add_argument('--sampler', type=str, default=None,
+                       choices=['ddpm', 'ddim'],
+                       help='Sampling method: ddpm (stochastic) or ddim (faster, deterministic)')
+    parser.add_argument('--eta', type=float, default=0.0,
+                       help='DDIM eta parameter: 0.0 = deterministic, 1.0 = stochastic (default: 0.0)')
     
     # Other options
     parser.add_argument('--no_ema', action='store_true',
@@ -129,8 +139,10 @@ def main():
     # Create method
     if args.method == 'ddpm':
         method = DDPM.from_config(model, config, device)
+    elif args.method == 'flow_matching':
+        method = FlowMatching.from_config(model, config, device)
     else:
-        raise ValueError(f"Unknown method: {args.method}. Only 'ddpm' is currently supported.")
+        raise ValueError(f"Unknown method: {args.method}. Supported methods: 'ddpm', 'flow_matching'")
     
     # Apply EMA weights
     if not args.no_ema:
@@ -144,6 +156,16 @@ def main():
     # Image shape
     data_config = config['data']
     image_shape = (data_config['channels'], data_config['image_size'], data_config['image_size'])
+    
+    # Determine sampler and sampling parameters
+    sampler = args.sampler or config['sampling'].get('sampler', 'ddpm')
+    num_steps = args.num_steps or config['sampling']['num_steps']
+    eta = args.eta if args.sampler == 'ddim' else config['sampling'].get('eta', 0.0)
+    
+    print(f"Sampler: {sampler}")
+    print(f"Number of steps: {num_steps}")
+    if sampler == 'ddim':
+        print(f"Eta (stochasticity): {eta}")
     
     # Generate samples
     print(f"Generating {args.num_samples} samples...")
@@ -161,12 +183,12 @@ def main():
         while remaining > 0:
             batch_size = min(args.batch_size, remaining)
 
-            num_steps = args.num_steps or config['sampling']['num_steps']
-
             samples = method.sample(
                 batch_size=batch_size,
                 image_shape=image_shape,
                 num_steps=num_steps,
+                sampler=sampler,
+                eta=eta,
                 # TODO: add your arugments here
             )
 
@@ -176,7 +198,7 @@ def main():
             else:
                 for i in range(samples.shape[0]):
                     img_path = os.path.join(args.output_dir, f"{sample_idx:06d}.png")
-                    save_samples(samples, img_path, 1)
+                    save_samples(samples[i:i+1], img_path, 1)
                     sample_idx += 1
 
             remaining -= batch_size

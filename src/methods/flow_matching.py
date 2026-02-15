@@ -1,0 +1,127 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from typing import Dict, Tuple, Optional
+
+from .base import BaseMethod
+
+class FlowMatching(BaseMethod):
+    def __init__(
+        self,
+        model: nn.Module,
+        device: torch.device,
+        num_inference_steps: int = 50,
+        sigma_min: float = 0.0,
+    ):
+        """
+        Flow Matching with Optimal Transport path (Linear Interpolation).
+        path: x_t = t * x_1 + (1 - t) * x_0
+        where x_1 is data, x_0 is noise.
+        """
+        super().__init__(model, device)
+        self.num_inference_steps = num_inference_steps
+        self.sigma_min = sigma_min
+
+    def compute_loss(self, x_0: torch.Tensor, **kwargs) -> Tuple[torch.Tensor, Dict[str, float]]:
+        """
+        Computes the Flow Matching loss.
+        
+        Args:
+            x_0: Clean data samples (Target x_1 in FM notation)
+            **kwargs: Additional method-specific arguments
+        """
+        batch_size = x_0.shape[0]
+
+        # 1. Sample time steps t uniformly from [0, 1]
+        # Note: FM uses continuous time, unlike DDPM's discrete steps
+        t = torch.rand((batch_size,), device=self.device)
+        
+        # Reshape t for broadcasting: (B, 1, 1, 1)
+        t_view = t.view(batch_size, *([1] * (x_0.ndim - 1)))
+
+        # 2. Sample random noise (Source x_0 in FM notation)
+        # We rename the input argument x_0 -> x_1 (data) to match math notation
+        x_1 = x_0
+        x_noise = torch.randn_like(x_1)
+
+        # 3. Compute x_t (Linear Interpolation / Optimal Transport Path)
+        # x_t = t * x_1 + (1 - t) * x_noise
+        # This creates a straight line path from noise to data.
+        x_t = t_view * x_1 + (1 - t_view) * x_noise
+
+        # 4. Compute the target vector field u_t
+        # Differentiating x_t w.r.t t gives: x_1 - x_noise
+        target_v = x_1 - x_noise
+
+        # 5. Predict the vector field v_t
+        # Note: We assume the model can handle float timesteps or embeddings
+        v_pred = self.model(x_t, t)
+
+        # 6. MSE Loss
+        loss = F.mse_loss(v_pred, target_v)
+
+        metrics = {
+            "loss": loss.item(),
+            "mse": loss.item(),
+        }
+        return loss, metrics
+
+    @torch.no_grad()
+    def sample(
+        self,
+        batch_size: int,
+        image_shape: Tuple[int, int, int],
+        steps: Optional[int] = None,
+        **kwargs
+    ) -> torch.Tensor:
+        """
+        Generate samples using an ODE solver (Euler method).
+        Starts from noise (t=0) and integrates to data (t=1).
+        
+        Args:
+            batch_size: Number of images
+            image_shape: (C, H, W)
+            steps: Number of Euler integration steps (defaults to self.num_inference_steps)
+        """
+        self.eval_mode()
+        if steps is None:
+            steps = self.num_inference_steps
+            
+        # 1. Start from pure noise at t=0
+        x = torch.randn((batch_size, *image_shape), device=self.device)
+        
+        # 2. Setup time grid
+        # We go from 0 to 1
+        times = torch.linspace(0, 1, steps + 1, device=self.device)
+        dt = 1.0 / steps
+
+        # 3. Euler Integration Loop
+        for i in range(steps):
+            # Current time t
+            t_curr = times[i]
+            
+            # Broadcast t for the batch
+            t_batch = torch.full((batch_size,), t_curr, device=self.device)
+            
+            # Predict vector field v at current point
+            v_pred = self.model(x, t_batch)
+            
+            # Euler step: x_{t+1} = x_t + v(x_t, t) * dt
+            x = x + v_pred * dt
+
+        return x
+
+    def to(self, device: torch.device) -> "FlowMatching":
+        super().to(device)
+        self.device = device
+        return self
+    
+    @classmethod
+    def from_config(cls, model: nn.Module, config: dict, device: torch.device) -> "FlowMatching":
+        fm_config = config.get("flow_matching", config)
+        return cls(
+            model=model,
+            device=device,
+            num_inference_steps=fm_config.get("num_inference_steps", 50),
+            sigma_min=fm_config.get("sigma_min", 0.0),
+        )

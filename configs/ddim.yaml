@@ -1,0 +1,65 @@
+data:
+  dataset: "celeba"
+  root: ./data/celeba-subset
+  from_hub: false  # run "python download_dataset.py --output_dir YOUR_PATH" first if you want to use false here
+  repo_name: "electronickale/cmu-10799-celeba64-subset"
+  image_size: 64
+  channels: 3
+  num_workers: 8
+  pin_memory: true
+  augment: true
+
+# TODO: build your model architecture, feel free to add or exclude any of these options
+model:
+  base_channels: 128
+  channel_mult: [1, 2, 2, 4]
+  num_res_blocks: 2
+  attention_resolutions: [16]
+  num_heads: 4
+  dropout: 0.1
+  use_scale_shift_norm: true
+
+# TODO: your training hyperparameters, feel free to add or exclude any of these options
+training:
+  batch_size: 32
+  learning_rate: 2.0e-4
+  weight_decay: 0.0
+  betas: [0.9, 0.999]
+  ema_decay: 0.9999
+  ema_start: 1000 # This is the start iter to use EMA during sampling at training time, as using EMA at the beginning may not be very meaningful
+  gradient_clip_norm: 1.0
+  num_iterations: 200000
+  log_every: 1
+  sample_every: 10000
+  save_every: 10000
+  num_samples: 64
+
+# TODO: your ddpm algorithm hyperparameters, feel free to add or exclude any of these options
+ddpm:
+  num_timesteps: 1000
+  beta_start: 1.0e-4
+  beta_end: 2.0e-2
+
+# DDIM sampling configuration
+sampling:
+  num_steps: 50  # DDIM can use much fewer steps (50 instead of 1000)
+  sampler: "ddim"  # Use DDIM sampler
+  eta: 0.0  # 0.0 = deterministic, 1.0 = stochastic (DDPM-like)
+
+infrastructure:
+  seed: 42
+  device: "cuda"
+  num_gpus: 1 # 1 should be ok
+  mixed_precision: true # both true and false should work
+  compile_model: false # only tested false
+
+checkpoint:
+  dir: "./checkpoints"
+  resume: null
+
+logging:
+  dir: "./logs"
+  wandb:
+    enabled: true
+    project: "cmu-10799-diffusion"
+    entity: null
