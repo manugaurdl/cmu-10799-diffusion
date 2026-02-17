@@ -75,8 +75,7 @@ class DDPM(BaseMethod):
     # =========================================================================
 
     def _extract(self, a: torch.Tensor, t: torch.Tensor, x_shape: Tuple[int, ...]) -> torch.Tensor:
-        a= a.cuda()
-        t= t.cuda()
+        a = a.to(t.device)
         batch_size = t.shape[0]
         out = a.gather(-1, t)
         return out.view(batch_size, *([1] * (len(x_shape) - 1)))

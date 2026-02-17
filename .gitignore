@@ -1,4 +1,6 @@
 # Python
+*.txt
+*.png
 __pycache__/
 *.py[cod]
 *$py.class

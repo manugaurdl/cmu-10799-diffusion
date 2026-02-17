@@ -9,8 +9,25 @@ data:
   pin_memory: true
   augment: true
 
-# TODO: build your model architecture, feel free to add or exclude any of these options
+# Model architecture:
+#   - set model.type: "dit" to train DDPM with Diffusion Transformer
+#   - set model.type: "unet" to use the original U-Net
 model:
+  type: "dit"
+
+  # DiT options:
+  # Option A) preset variant from facebookresearch/DiT naming:
+  dit_variant: "DiT-S/4"
+  mlp_ratio: 4.0
+  learn_sigma: false
+
+  # Option B) custom DiT size (used if dit_variant is not set):
+  # patch_size: 4
+  # hidden_size: 384
+  # depth: 12
+  # num_heads: 6
+
+  # U-Net options (used only when type == "unet"):
   base_channels: 128
   channel_mult: [1, 2, 2, 4]
   num_res_blocks: 2

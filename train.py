@@ -39,7 +39,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 
-from src.models import UNet, create_model_from_config
+from src.models import create_model_from_config
 from src.data import create_dataloader_from_config, save_image, unnormalize
 from src.methods import DDPM, FlowMatching
 from src.utils import EMA
