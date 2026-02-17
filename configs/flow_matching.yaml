@@ -48,7 +48,7 @@ training:
   ema_decay: 0.999
   ema_start: 1000
   gradient_clip_norm: 1.0
-  num_iterations: 100000
+  num_iterations: 200000
   log_every: 1
   sample_every: 10000
   save_every: 10000
