@@ -1,6 +1,6 @@
 data:
   dataset: "celeba"
-  root: ./data/celeba-subset
+  root: /nas/manu/celebA/data/celeba-subset #./data/celeba-subset
   from_hub: false  # run "python download_dataset.py --output_dir YOUR_PATH" first if you want to use false here
   repo_name: "electronickale/cmu-10799-celeba64-subset"
   image_size: 64

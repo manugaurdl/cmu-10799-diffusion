@@ -235,12 +235,11 @@ class CelebADataset(Dataset):
         """Build the preprocessing transforms."""
         transform_list = []
 
-        # Resize/center-crop only if needed (dataset images are already 64x64)
-        if self.image_size != 64:
-            transform_list.append(
-                transforms.Resize(self.image_size, interpolation=transforms.InterpolationMode.BILINEAR)
-            )
-            transform_list.append(transforms.CenterCrop(self.image_size))
+        # Always enforce target spatial size from config.
+        transform_list.append(
+            transforms.Resize(self.image_size, interpolation=transforms.InterpolationMode.BILINEAR)
+        )
+        transform_list.append(transforms.CenterCrop(self.image_size))
 
         # Light data augmentation for training
         if self.augment and self.split == "train":
