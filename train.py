@@ -142,13 +142,40 @@ def reduce_metrics(
 def create_optimizer(model: nn.Module, config: dict) -> torch.optim.Optimizer:
     """Create optimizer from config."""
     training_config = config['training']
+    base_lr = training_config.get('peak_lr', training_config['learning_rate'])
     optimizer = torch.optim.AdamW(
         model.parameters(),
-        lr=training_config['learning_rate'],
+        lr=base_lr,
         betas=tuple(training_config['betas']),
         weight_decay=training_config['weight_decay'],
     )
     return optimizer
+
+
+def compute_learning_rate(step: int, config: dict) -> float:
+    """
+    Compute LR with linear warmup followed by cosine decay.
+
+    Schedule:
+    - Warmup: 0 -> peak_lr over `warmup_steps`
+    - Cosine: peak_lr -> min_lr over 200k steps
+    """
+    training_config = config['training']
+    warmup_steps = int(training_config.get('warmup_steps', 0))
+    peak_lr = float(training_config.get('peak_lr', training_config['learning_rate']))
+    min_lr = float(training_config.get('min_lr', peak_lr))
+    cosine_decay_steps = 200_000
+
+    if warmup_steps > 0 and step < warmup_steps:
+        return peak_lr * float(step + 1) / float(warmup_steps)
+
+    decay_step = max(0, step - warmup_steps)
+    if decay_step >= cosine_decay_steps:
+        return min_lr
+
+    progress = float(decay_step) / float(cosine_decay_steps)
+    cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+    return min_lr + (peak_lr - min_lr) * cosine
 
 
 def save_checkpoint(
@@ -517,6 +544,10 @@ def train(
         disable=not is_main_process,
     )
     for step in pbar:
+        current_lr = compute_learning_rate(step, config)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = current_lr
+
         # Get batch (cycle through dataset or use single batch)
         if overfit_single_batch:
             batch = single_batch

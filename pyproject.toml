@@ -16,6 +16,7 @@ dependencies = [
     "tqdm>=4.64.0",
     "scipy>=1.9.0",
     "ipdb>=0.13.13",
+    "wandb>=0.24.0",
 ]
 
 [project.optional-dependencies]
