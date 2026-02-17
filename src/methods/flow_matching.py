@@ -32,26 +32,33 @@ class FlowMatching(BaseMethod):
         """
         batch_size = x_0.shape[0]
 
-        # x_1 is clean data and x_0_src is Gaussian source noise in FM notation.
-        x_1 = x_0
-        x_0_src = torch.randn_like(x_1)
-
-        # Sample t in [0, 1], build interpolant x_t, and target velocity.
+        # 1. Sample time steps t uniformly from [0, 1]
+        # Note: FM uses continuous time, unlike DDPM's discrete steps
         t = torch.rand((batch_size,), device=self.device)
-        t_expand = t.view(-1, 1, 1, 1)
-        x_t = (1.0 - t_expand) * x_0_src + t_expand * x_1
-        target_velocity = x_1 - x_0_src
+        
+        # Reshape t for broadcasting: (B, 1, 1, 1)
+        t_view = t.view(batch_size, *([1] * (x_0.ndim - 1)))
 
-        # Match model timestep interface (DDPM-style integer index in [0, 999]).
-        t_scaled = (t * 999).long()
-        predicted_velocity = self.model(x_t, t_scaled)
+        # 2. Sample random noise (Source x_0 in FM notation)
+        # We rename the input argument x_0 -> x_1 (data) to match math notation
+        x_1 = x_0
+        x_noise = torch.randn_like(x_1)
 
-        # Compute per-sample FM MSE and then average across batch.
-        pv = predicted_velocity.float()
-        tv = target_velocity.float()
-        mse_loss = F.mse_loss(pv, tv, reduction="none")
-        mse_loss = mse_loss.mean(dim=[1, 2, 3])
-        loss = mse_loss.mean()
+        # 3. Compute x_t (Linear Interpolation / Optimal Transport Path)
+        # x_t = t * x_1 + (1 - t) * x_noise
+        # This creates a straight line path from noise to data.
+        x_t = t_view * x_1 + (1 - t_view) * x_noise
+
+        # 4. Compute the target vector field u_t
+        # Differentiating x_t w.r.t t gives: x_1 - x_noise
+        target_v = x_1 - x_noise
+
+        # 5. Predict the vector field v_t
+        # Note: We assume the model can handle float timesteps or embeddings
+        v_pred = self.model(x_t, t)
+
+        # 6. MSE Loss
+        loss = F.mse_loss(v_pred, target_v)
 
         metrics = {
             "loss": loss.item(),
