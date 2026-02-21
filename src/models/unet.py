@@ -164,7 +164,7 @@ class UNet(nn.Module):
                 self.upsamples.append(Upsample(in_ch))
         
         # Output head
-        self.out_norm = GroupNorm32(32, in_ch)
+        self.out_norm = GroupNorm32(16, in_ch)
         self.out_conv = nn.Conv2d(in_ch, out_channels, kernel_size=3, padding=1)
     
     def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:

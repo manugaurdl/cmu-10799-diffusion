@@ -17,18 +17,19 @@ model:
 
   # DiT options:
   # Option A) preset variant from facebookresearch/DiT naming:
-  dit_variant: "DiT-S/4"
+  dit_variant: null #"DiT-S/4"
   mlp_ratio: 4.0
   learn_sigma: false
 
   # Option B) custom DiT size (used if dit_variant is not set):
-  # patch_size: 4
-  # hidden_size: 384
-  # depth: 12
-  # num_heads: 6
+  patch_size: 2
+  hidden_size: 384
+  depth: 12
+  num_heads: 6
 
   # U-Net options (used only when type == "unet"):
-  base_channels: 128
+  # NOTE: base_channels reduced from 128 -> 80 to target ~30M params (from ~80M)
+  base_channels: 80
   channel_mult: [1, 2, 2, 4]
   num_res_blocks: 2
   attention_resolutions: [16]
@@ -36,14 +37,18 @@ model:
   dropout: 0.1
   use_scale_shift_norm: true
 
-# TODO: your training hyperparameters, feel free to add or exclude any of these options
+
+# Training hyperparameters (same as Flow Matching for fair comparison)
 training:
   batch_size: 32
-  learning_rate: 2.0e-4
-  weight_decay: 0.0
+  learning_rate: 1.0e-4
+  warmup_steps: 5000
+  peak_lr: 1.0e-4
+  min_lr: 1.0e-6
+  weight_decay: 0.01
   betas: [0.9, 0.999]
-  ema_decay: 0.9999
-  ema_start: 1000 # This is the start iter to use EMA during sampling at training time, as using EMA at the beginning may not be very meaningful
+  ema_decay: 0.999
+  ema_start: 1000
   gradient_clip_norm: 1.0
   num_iterations: 200000
   log_every: 1

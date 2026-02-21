@@ -113,7 +113,7 @@ class ResBlock(nn.Module):
         self.use_scale_shift_norm = use_scale_shift_norm
         
         # First convolution block
-        self.norm1 = GroupNorm32(32, in_channels)
+        self.norm1 = GroupNorm32(16, in_channels)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
         
         # Time embedding projection
@@ -125,7 +125,7 @@ class ResBlock(nn.Module):
         )
         
         # Second convolution block
-        self.norm2 = GroupNorm32(32, out_channels)
+        self.norm2 = GroupNorm32(16, out_channels)
         self.dropout = nn.Dropout(dropout)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
         
@@ -200,7 +200,7 @@ class AttentionBlock(nn.Module):
         assert channels % num_heads == 0, \
             f"channels ({channels}) must be divisible by num_heads ({num_heads})"
         
-        self.norm = GroupNorm32(32, channels)
+        self.norm = GroupNorm32(16, channels)
         
         # QKV projection (combined for efficiency)
         self.qkv = nn.Conv2d(channels, channels * 3, kernel_size=1)
