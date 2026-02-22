@@ -13,7 +13,7 @@ data:
 #   - set model.type: "dit" to train DDPM with Diffusion Transformer
 #   - set model.type: "unet" to use the original U-Net
 model:
-  type: "dit"
+  type: unet #"dit"
 
   # DiT options:
   # Option A) preset variant from facebookresearch/DiT naming:
@@ -42,7 +42,7 @@ model:
 training:
   batch_size: 32
   gradient_accumulation_steps: 4
-  const_lr: false
+  const_lr: true ##### unet
   learning_rate: 1.0e-4
   warmup_steps: 10000
   peak_lr: 1.0e-4
@@ -52,10 +52,10 @@ training:
   ema_decay: 0.999
   ema_start: 1000
   gradient_clip_norm: 1.0
-  num_iterations: 400000
+  num_iterations: 150000 ##unet
   log_every: 1
   sample_every: 10000
-  save_every: 10000
+  save_every: 50000
   num_samples: 64
 
 # TODO: your ddpm algorithm hyperparameters, feel free to add or exclude any of these options

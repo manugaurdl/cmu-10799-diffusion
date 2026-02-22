@@ -236,10 +236,12 @@ class CelebADataset(Dataset):
         transform_list = []
 
         # Always enforce target spatial size from config.
+        # First center-crop to the shorter side (makes the image square),
+        # then resize to the target resolution.
+        transform_list.append(transforms.Lambda(lambda img: transforms.CenterCrop(min(img.size))(img)))
         transform_list.append(
             transforms.Resize(self.image_size, interpolation=transforms.InterpolationMode.BILINEAR)
         )
-        transform_list.append(transforms.CenterCrop(self.image_size))
 
         # Light data augmentation for training
         if self.augment and self.split == "train":
