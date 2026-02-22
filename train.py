@@ -38,6 +38,7 @@ from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
+from diffusers import AutoencoderKL
 
 from src.models import create_model_from_config
 from src.data import create_dataloader_from_config, save_image, unnormalize
@@ -232,6 +233,7 @@ def generate_samples(
     config: dict,
     ema: Optional[EMA] = None,
     current_step: Optional[int] = None,
+    vae: Optional["AutoencoderKL"] = None,
     # TODO: add/delete your arguments here
     **sampling_kwargs,
 ) -> torch.Tensor:
@@ -275,6 +277,11 @@ def generate_samples(
         num_steps=num_steps,
         **sampling_kwargs,
     )
+
+    # Decode latents to pixel space if VAE is used
+    if vae is not None:
+        samples = samples / 0.18215
+        samples = vae.decode(samples).sample  # (B, 3, H, W)
 
     if use_ema:
         ema.restore()
@@ -413,6 +420,16 @@ def train(
         print("Creating model...")
     base_model = create_model_from_config(config).to(device)
 
+    # Load VAE for latent decoding during sampling (only when use_vae=True, no grad needed)
+    vae = None
+    if data_config.get('use_vae', False):
+        if is_main_process:
+            print("Loading VAE for sample decoding...")
+        vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse").to(device)
+        vae.eval()
+        for p in vae.parameters():
+            p.requires_grad_(False)
+
     torch.manual_seed(seed + rank)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed + rank)
@@ -489,8 +506,14 @@ def train(
     gradient_clip_norm = training_config['gradient_clip_norm']
     gradient_accumulation_steps = training_config.get('gradient_accumulation_steps', 1)
     
-    # Image shape for sampling
-    image_shape = (data_config['channels'], data_config['image_size'], data_config['image_size'])
+    # Image/latent shape for sampling
+    use_vae = data_config.get('use_vae', False)
+    if use_vae:
+        spatial = data_config['latent_size']
+    else:
+        spatial = data_config['image_size']
+    image_shape = (data_config['channels'], spatial, spatial)
+
     
     # Training loop
     if is_main_process:
@@ -652,6 +675,7 @@ def train(
                     config,
                     ema,
                     current_step=step + 1,
+                    vae=vae,
                 )
                 sample_path = os.path.join(log_dir, 'samples', f'samples_{step + 1:07d}.png')
                 save_samples(samples, sample_path, num_samples)

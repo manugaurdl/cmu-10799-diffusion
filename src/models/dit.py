@@ -276,6 +276,10 @@ def DiT_B_8(**kwargs) -> DiT:
     return DiT(depth=12, hidden_size=768, patch_size=8, num_heads=12, **kwargs)
 
 
+def DiT_S_1(**kwargs) -> DiT:
+    return DiT(depth=12, hidden_size=384, patch_size=1, num_heads=6, **kwargs)
+
+
 def DiT_S_2(**kwargs) -> DiT:
     return DiT(depth=12, hidden_size=384, patch_size=2, num_heads=6, **kwargs)
 
@@ -298,6 +302,7 @@ DiT_models: Dict[str, Callable[..., DiT]] = {
     "DiT-B/2": DiT_B_2,
     "DiT-B/4": DiT_B_4,
     "DiT-B/8": DiT_B_8,
+    "DiT-S/1": DiT_S_1,
     "DiT-S/2": DiT_S_2,
     "DiT-S/4": DiT_S_4,
     "DiT-S/8": DiT_S_8,
@@ -308,9 +313,13 @@ def create_dit_from_config(config: dict) -> DiT:
     model_config = config["model"]
     data_config = config["data"]
 
+    use_vae = data_config.get("use_vae", False)
+    # When using VAE latents, the model operates on latent_size x latent_size tensors
+    input_size = data_config["latent_size"] if use_vae else data_config["image_size"]
+
     variant: Optional[str] = model_config.get("dit_variant", model_config.get("variant", None))
     common_kwargs = dict(
-        input_size=data_config["image_size"],
+        input_size=input_size,
         in_channels=data_config["channels"],
         learn_sigma=model_config.get("learn_sigma", False),
         mlp_ratio=model_config.get("mlp_ratio", 4.0),

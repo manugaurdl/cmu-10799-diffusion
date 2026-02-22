@@ -35,6 +35,7 @@ from datetime import datetime
 
 import yaml
 import torch
+from diffusers import AutoencoderKL
 from tqdm import tqdm
 
 from src.models import create_model_from_config
@@ -153,9 +154,20 @@ def main():
     
     method.eval_mode()
     
-    # Image shape
+    # Image / latent shape
     data_config = config['data']
-    image_shape = (data_config['channels'], data_config['image_size'], data_config['image_size'])
+    use_vae = data_config.get('use_vae', False)
+    spatial = data_config['latent_size'] if use_vae else data_config['image_size']
+    image_shape = (data_config['channels'], spatial, spatial)
+
+    # Load VAE for decoding if needed
+    vae = None
+    if use_vae:
+        print("Loading VAE for decoding...")
+        vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse").to(device)
+        vae.eval()
+        for p in vae.parameters():
+            p.requires_grad_(False)
     
     # Determine sampler and sampling parameters
     sampler = args.sampler or config['sampling'].get('sampler', 'ddpm')
@@ -191,6 +203,12 @@ def main():
                 eta=eta,
                 # TODO: add your arugments here
             )
+
+            # Decode latents through VAE if needed
+            if vae is not None:
+                with torch.no_grad():
+                    samples = samples / 0.18215
+                    samples = vae.decode(samples).sample  # (B, 3, H, W)
 
             # Save individual images immediately or collect for grid
             if args.grid:

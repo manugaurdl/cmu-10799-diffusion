@@ -295,6 +295,34 @@ class CelebADataset(Dataset):
         return image
 
 
+class LatentDataset(Dataset):
+    """
+    Loads precomputed VAE latent tensors (.pt files) from disk.
+
+    Expects files at: root/<split>/latents/<stem>.pt
+    Each file contains a tensor of shape (C, H, W), already scaled by 0.18215.
+    """
+
+    def __init__(self, root: str, split: str = "train"):
+        from pathlib import Path
+        latent_dir = Path(root) / split / "latents"
+        if not latent_dir.exists():
+            raise FileNotFoundError(
+                f"Latents directory not found: {latent_dir}\n"
+                f"Run precompute.py --split {split} first."
+            )
+        self.files = sorted(latent_dir.glob("*.pt"))
+        if not self.files:
+            raise FileNotFoundError(f"No .pt files found in {latent_dir}")
+        print(f"Loaded {len(self.files)} latents from {latent_dir}")
+
+    def __len__(self) -> int:
+        return len(self.files)
+
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        return torch.load(self.files[idx], weights_only=True)
+
+
 def create_dataloader(
     root: str = "./data/celeba-subset",
     split: str = "train",
@@ -364,6 +392,21 @@ def create_dataloader_from_config(config: dict, split: str = "train") -> DataLoa
     """
     data_config = config['data']
     training_config = config['training']
+
+    use_vae = data_config.get('use_vae', False)
+    if use_vae:
+        dataset = LatentDataset(
+            root=data_config.get('root', './data/celeba-subset'),
+            split=split,
+        )
+        return DataLoader(
+            dataset,
+            batch_size=training_config['batch_size'],
+            shuffle=(split == 'train'),
+            num_workers=data_config['num_workers'],
+            pin_memory=data_config['pin_memory'],
+            drop_last=True,
+        )
 
     return create_dataloader(
         root=data_config.get('root', './data/celeba-subset'),
