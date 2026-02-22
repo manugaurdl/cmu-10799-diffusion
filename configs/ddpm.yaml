@@ -1,6 +1,6 @@
 data:
   dataset: "celeba"
-  root: ./data/celeba-subset
+  root: /data_new/manu/celebA/data/celeba-subset/200k
   from_hub: false  # run "python download_dataset.py --output_dir YOUR_PATH" first if you want to use false here
   repo_name: "electronickale/cmu-10799-celeba64-subset"
   image_size: 64
@@ -17,12 +17,12 @@ model:
 
   # DiT options:
   # Option A) preset variant from facebookresearch/DiT naming:
-  dit_variant: null #"DiT-S/4"
+  dit_variant: "DiT-S/4" #null
   mlp_ratio: 4.0
   learn_sigma: false
 
   # Option B) custom DiT size (used if dit_variant is not set):
-  patch_size: 2
+  patch_size: 4
   hidden_size: 384
   depth: 12
   num_heads: 6
@@ -41,8 +41,9 @@ model:
 # Training hyperparameters (same as Flow Matching for fair comparison)
 training:
   batch_size: 32
+  gradient_accumulation_steps: 4
   learning_rate: 1.0e-4
-  warmup_steps: 5000
+  warmup_steps: 10000
   peak_lr: 1.0e-4
   min_lr: 1.0e-6
   weight_decay: 0.01
@@ -50,7 +51,7 @@ training:
   ema_decay: 0.999
   ema_start: 1000
   gradient_clip_norm: 1.0
-  num_iterations: 200000
+  num_iterations: 400000
   log_every: 1
   sample_every: 10000
   save_every: 10000

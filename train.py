@@ -487,6 +487,7 @@ def train(
     save_every = training_config['save_every']
     num_samples = training_config['num_samples']
     gradient_clip_norm = training_config['gradient_clip_norm']
+    gradient_accumulation_steps = training_config.get('gradient_accumulation_steps', 1)
     
     # Image shape for sampling
     image_shape = (data_config['channels'], data_config['image_size'], data_config['image_size'])
@@ -548,32 +549,41 @@ def train(
         for param_group in optimizer.param_groups:
             param_group['lr'] = current_lr
 
-        # Get batch (cycle through dataset or use single batch)
-        if overfit_single_batch:
-            batch = single_batch
-        else:
-            try:
-                batch = next(data_iter)
-            except StopIteration:
-                epoch += 1
-                if sampler is not None:
-                    sampler.set_epoch(epoch)
-                data_iter = iter(dataloader)
-                batch = next(data_iter)
-
-            if isinstance(batch, (tuple, list)):
-                batch = batch[0]  # Handle (image, label) tuples
-
-            batch = batch.to(device)
-        
-        # Forward pass with mixed precision
         optimizer.zero_grad()
-        
-        with autocast(device_type, enabled=config['infrastructure']['mixed_precision']):
-            loss, metrics = method.compute_loss(batch)
-        
-        # Backward pass
-        scaler.scale(loss).backward()
+
+        for _ in range(gradient_accumulation_steps):
+            # Get batch (cycle through dataset or use single batch)
+            if overfit_single_batch:
+                batch = single_batch
+            else:
+                try:
+                    batch = next(data_iter)
+                except StopIteration:
+                    epoch += 1
+                    if sampler is not None:
+                        sampler.set_epoch(epoch)
+                    data_iter = iter(dataloader)
+                    batch = next(data_iter)
+    
+                if isinstance(batch, (tuple, list)):
+                    batch = batch[0]  # Handle (image, label) tuples
+    
+                batch = batch.to(device)
+            
+            # Forward pass with mixed precision
+            with autocast(device_type, enabled=config['infrastructure']['mixed_precision']):
+                loss, metrics = method.compute_loss(batch)
+                loss = loss / gradient_accumulation_steps
+            
+            # Backward pass
+            scaler.scale(loss).backward()
+            
+            # Accumulate metrics (store raw values, will reduce when logging)
+            for k, v in metrics.items():
+                if k not in metrics_sum:
+                    metrics_sum[k] = []
+                metrics_sum[k].append(v.detach().item() if torch.is_tensor(v) else float(v))
+            metrics_count += 1
         
         # Gradient clipping
         if gradient_clip_norm > 0:
@@ -586,13 +596,6 @@ def train(
 
         # EMA update - DISABLED
         ema.update()
-        
-        # Accumulate metrics (store raw values, will reduce when logging)
-        for k, v in metrics.items():
-            if k not in metrics_sum:
-                metrics_sum[k] = []
-            metrics_sum[k].append(v.detach().item() if torch.is_tensor(v) else float(v))
-        metrics_count += 1
         
         # Logging
         if (step + 1) % log_every == 0:
