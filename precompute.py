@@ -34,7 +34,7 @@ IMAGE_SIZE = 64
 def build_transform(image_size: int = IMAGE_SIZE) -> transforms.Compose:
     return transforms.Compose(
         [
-            transforms.CenterCrop(min(image_size, image_size)),  # square-safe no-op at 64
+            transforms.Lambda(lambda img: transforms.CenterCrop(min(img.size))(img)),  # crop to shorter side of original
             transforms.Resize((image_size, image_size), interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
             transforms.ToTensor(),
             transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
@@ -62,7 +62,7 @@ def precompute_split(split: str, vae: AutoencoderKL, device: torch.device, trans
     print(f"[{split}] Found {len(image_paths)} images. Saving latents to {latent_dir}")
 
     with torch.no_grad():
-        for img_path in tqdm(image_paths, desc=f"Encoding [{split}]", dynamic_ncols=True):
+        for img_idx, img_path in tqdm(enumerate(image_paths), desc=f"Encoding [{split}]", dynamic_ncols=True):
             latent_path = latent_dir / (img_path.stem + ".pt")
             if latent_path.exists():
                 # Skip already-computed latents to allow resuming

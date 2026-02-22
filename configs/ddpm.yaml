@@ -3,7 +3,7 @@ data:
   root: /data_new/manu/celebA/data/celeba-subset/200k
   from_hub: false  # run "python download_dataset.py --output_dir YOUR_PATH" first if you want to use false here
   repo_name: "electronickale/cmu-10799-celeba64-subset"
-  use_vae: true          # if true, load precomputed latents; else load raw images
+  use_vae: true        # if true, load precomputed latents; else load raw images
   image_size: 64         # pixel resolution (used for raw images or VAE decode output)
   latent_size: 8         # spatial size of VAE latents (64 / 8 = 8)
   channels: 4            # latent channels when use_vae=true, else 3
@@ -19,7 +19,7 @@ model:
 
   # DiT options:
   # Option A) preset variant from facebookresearch/DiT naming:
-  dit_variant: "DiT-S/4" #null, DiT-S/1
+  dit_variant: "DiT-S/1" #null, DiT-S/1
   mlp_ratio: 4.0
   learn_sigma: false
 
@@ -42,8 +42,8 @@ model:
 
 # Training hyperparameters (same as Flow Matching for fair comparison)
 training:
-  batch_size: 32
-  gradient_accumulation_steps: 4
+  batch_size: 128
+  gradient_accumulation_steps: 1
   const_lr: false ##### unet
   learning_rate: 1.0e-4
   warmup_steps: 10000
@@ -78,11 +78,11 @@ infrastructure:
   compile_model: false # only tested false
 
 checkpoint:
-  dir: "./checkpoints"
+  dir: "/data_new/manu/celebA/checkpoints"
   resume: null
 
 logging:
-  dir: "./logs"
+  dir: "/data_new/manu/celebA/logs"
   wandb:
     enabled: true
     project: "cmu-10799-diffusion"
