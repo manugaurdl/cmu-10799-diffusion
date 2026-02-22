@@ -42,6 +42,7 @@ model:
 training:
   batch_size: 32
   gradient_accumulation_steps: 4
+  const_lr: false
   learning_rate: 1.0e-4
   warmup_steps: 10000
   peak_lr: 1.0e-4

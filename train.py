@@ -546,6 +546,8 @@ def train(
     )
     for step in pbar:
         current_lr = compute_learning_rate(step, config)
+        if config['training'].get('const_lr', False):
+            current_lr = 1e-4
         for param_group in optimizer.param_groups:
             param_group['lr'] = current_lr
 
