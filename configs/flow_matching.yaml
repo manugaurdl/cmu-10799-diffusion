@@ -1,34 +1,37 @@
 data:
   dataset: "celeba"
-  root: /nas/manu/celebA/data/celeba-subset #./data/celeba-subset
+  root: /data_new/manu/celebA/data/celeba-subset/200k
   from_hub: false  # run "python download_dataset.py --output_dir YOUR_PATH" first if you want to use false here
   repo_name: "electronickale/cmu-10799-celeba64-subset"
-  image_size: 64
-  channels: 3
+  use_vae: false        # if true, load precomputed latents; else load raw images
+  image_size: 64         # pixel resolution (used for raw images or VAE decode output)
+  latent_size: 8         # spatial size of VAE latents (64 / 8 = 8)
+  channels: 3            # latent channels when use_vae=true, else 3
   num_workers: 8
   pin_memory: true
-  augment: true
+  augment: false
 
 # Model architecture:
 #   - set model.type: "dit" to train Flow Matching with Diffusion Transformer
 #   - set model.type: "unet" to use the original U-Net
 model:
-  type: "dit"
+  type: unet #"dit"
 
   # DiT options:
   # Option A) preset variant from facebookresearch/DiT naming:
-  dit_variant: null #"DiT-S/4"
+  dit_variant: "DiT-S/4" #null, DiT-S/1
   mlp_ratio: 4.0
   learn_sigma: false
 
   # Option B) custom DiT size (used if dit_variant is not set):
-  patch_size: 2
+  patch_size: 4
   hidden_size: 384
   depth: 12
   num_heads: 6
 
   # U-Net options (used only when type == "unet"):
-  base_channels: 128
+  # NOTE: base_channels reduced from 128 -> 80 to target ~30M params (from ~80M)
+  base_channels: 80
   channel_mult: [1, 2, 2, 4]
   num_res_blocks: 2
   attention_resolutions: [16]
@@ -36,11 +39,13 @@ model:
   dropout: 0.1
   use_scale_shift_norm: true
 
-# Training hyperparameters (same as DDPM for fair comparison)
+# Training hyperparameters (same as Flow Matching for fair comparison)
 training:
   batch_size: 32
+  gradient_accumulation_steps: 4
+  const_lr: true ##### unet
   learning_rate: 1.0e-4
-  warmup_steps: 5000
+  warmup_steps: 10000
   peak_lr: 1.0e-4
   min_lr: 1.0e-6
   weight_decay: 0.01
@@ -48,10 +53,10 @@ training:
   ema_decay: 0.999
   ema_start: 1000
   gradient_clip_norm: 1.0
-  num_iterations: 100000
+  num_iterations: 150000 ##unet
   log_every: 1
   sample_every: 10000
-  save_every: 10000
+  save_every: 50000
   num_samples: 64
 
 # Flow matching specific parameters
@@ -66,16 +71,16 @@ sampling:
 infrastructure:
   seed: 42
   device: "cuda"
-  num_gpus: 1
-  mixed_precision: true
-  compile_model: false
+  num_gpus: 1 # 1 should be ok
+  mixed_precision: true # both true and false should work
+  compile_model: false # only tested false
 
 checkpoint:
-  dir: "./checkpoints"
+  dir: "/data_new/manu/celebA/checkpoints"
   resume: null
 
 logging:
-  dir: "./logs"
+  dir: "/data_new/manu/celebA/logs"
   wandb:
     enabled: true
     project: "cmu-10799-diffusion"

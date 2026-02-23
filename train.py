@@ -18,6 +18,9 @@ Usage:
     # Train Flow Matching
     python train.py --method flow_matching --config configs/flow_matching.yaml
 
+    # Train JiT (x-prediction Flow Matching)
+    python train.py --method jit --config configs/jit.yaml
+
     # Resume training
     python train.py --method ddpm --config configs/ddpm.yaml --resume checkpoints/ddpm_50000.pt
 """
@@ -42,7 +45,7 @@ from diffusers import AutoencoderKL
 
 from src.models import create_model_from_config
 from src.data import create_dataloader_from_config, save_image, unnormalize
-from src.methods import DDPM, FlowMatching
+from src.methods import DDPM, FlowMatching, JiTFlowMatching
 from src.utils import EMA
 
 import wandb
@@ -319,7 +322,7 @@ def train(
     Main training loop.
 
     Args:
-        method_name: 'ddpm' or 'flow_matching'
+        method_name: 'ddpm', 'flow_matching', or 'jit'
         config: Configuration dictionary
         resume_path: Path to checkpoint to resume from
         overfit_single_batch: If True, train on a single batch repeatedly for debugging
@@ -454,8 +457,10 @@ def train(
         method = DDPM.from_config(model, config, device)
     elif method_name == 'flow_matching':
         method = FlowMatching.from_config(model, config, device)
+    elif method_name == 'jit':
+        method = JiTFlowMatching.from_config(model, config, device)
     else:
-        raise ValueError(f"Unknown method: {method_name}. Supported methods: 'ddpm', 'flow_matching'")
+        raise ValueError(f"Unknown method: {method_name}. Supported methods: 'ddpm', 'flow_matching', 'jit'")
 
     # Create optimizer
     optimizer = create_optimizer(model, config) # default to AdamW optimizer
@@ -731,8 +736,8 @@ def train(
 def main():
     parser = argparse.ArgumentParser(description='Train diffusion models')
     parser.add_argument('--method', type=str, required=True,
-                       choices=['ddpm', 'flow_matching'],
-                       help='Method to train: ddpm or flow_matching')
+                       choices=['ddpm', 'flow_matching', 'jit'],
+                       help='Method to train: ddpm, flow_matching, or jit')
     parser.add_argument('--config', type=str, required=True,
                        help='Path to config file (e.g., configs/ddpm.yaml or configs/flow_matching.yaml)')
     parser.add_argument('--resume', type=str, default=None,
