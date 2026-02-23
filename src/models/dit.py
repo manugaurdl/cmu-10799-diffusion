@@ -196,13 +196,37 @@ class DiT(nn.Module):
         x = torch.einsum("nhwpqc->nchpwq", x)
         return x.reshape(shape=(x.shape[0], c, h * p, h * p))
 
-    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        t: torch.Tensor,
+        return_layer: int = -1,
+    ):
+        """Forward pass.
+
+        Args:
+            x: Noisy input image tensor (B, C, H, W).
+            t: Timestep tensor (B,).
+            return_layer: If >= 0, also return the token tensor [B, T, D] taken
+                from *after* the block at this index (0-indexed). Used by iREPA
+                to compute the representation alignment loss.
+                If -1 (default) only the image output is returned.
+
+        Returns:
+            If return_layer == -1: image tensor (B, C, H, W).
+            Else: tuple (image tensor, intermediate tokens [B, T, D]).
+        """
         x = self.x_embedder(x) + self.pos_embed
         c = self.t_embedder(t)
-        for block in self.blocks:
+        intermediate = None
+        for i, block in enumerate(self.blocks):
             x = block(x, c)
-        x = self.final_layer(x, c)
-        return self.unpatchify(x)
+            if i == return_layer:
+                intermediate = x  # [B, T, D]
+        out = self.unpatchify(self.final_layer(x, c))
+        if return_layer >= 0:
+            return out, intermediate
+        return out
 
 
 def get_2d_sincos_pos_embed(

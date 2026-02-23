@@ -4,21 +4,20 @@ data:
   from_hub: false  # run "python download_dataset.py --output_dir YOUR_PATH" first if you want to use false here
   repo_name: "electronickale/cmu-10799-celeba64-subset"
   use_vae: false        # if true, load precomputed latents; else load raw images
-  image_size: 64         # pixel resolution (used for raw images or VAE decode output)
+  image_size: 128         # pixel resolution (used for raw images or VAE decode output)
   latent_size: 8         # spatial size of VAE latents (64 / 8 = 8)
   channels: 3            # latent channels when use_vae=true, else 3
   num_workers: 8
   pin_memory: true
-  augment: false
+  augment: true
 
 # Model architecture:
 #   - set model.type: "dit" to train JiT with Diffusion Transformer
 #   - set model.type: "unet" to use the original U-Net
 model:
-  type: unet
-
+  type: dit
   # DiT options:
-  dit_variant: "DiT-S/4"
+  dit_variant: "DiT-S/8"
   mlp_ratio: 4.0
   learn_sigma: false
 
@@ -41,7 +40,7 @@ model:
 training:
   batch_size: 32
   gradient_accumulation_steps: 4
-  const_lr: true
+  const_lr: false ##unet/dit
   learning_rate: 1.0e-4
   warmup_steps: 10000
   peak_lr: 1.0e-4
@@ -51,7 +50,7 @@ training:
   ema_decay: 0.999
   ema_start: 1000
   gradient_clip_norm: 1.0
-  num_iterations: 150000
+  num_iterations: 300000 ## unet/dit
   log_every: 1
   sample_every: 10000
   save_every: 50000
@@ -87,3 +86,14 @@ logging:
     enabled: true
     project: "cmu-10799-diffusion"
     entity: null
+
+# iREPA (Improved REPresentation Alignment) - auxiliary loss
+# Aligns intermediate DiT token features with a frozen DINOv2 encoder.
+# Key improvements over REPA:
+#   1. Conv2d projection (3x3) instead of MLP
+#   2. Spatial normalisation of encoder features before the cosine loss
+irepa:
+  enabled: true
+  weight: 0.5               # λ — weight of alignment loss added to diffusion loss
+  layer: 6                  # DiT block index (0-based) to extract tokens from
+  encoder: "dinov2_vits14"  # frozen visual encoder (facebookresearch/dinov2 hub key)
