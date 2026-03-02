@@ -36,6 +36,7 @@ from datetime import datetime
 import yaml
 import torch
 from diffusers import AutoencoderKL
+from PIL import Image as PILImage
 from tqdm import tqdm
 
 from src.models import create_model_from_config
@@ -60,14 +61,14 @@ def load_checkpoint(checkpoint_path: str, device: torch.device):
     return model, config, ema
 
 
-def save_samples(
+def save_grid(
     samples: torch.Tensor,
     save_path: str,
     num_samples: int,
     nrow: int | None = None,
 ) -> None:
     """
-    TODO: save generated samples as images.
+    Save generated samples as a grid image.
 
     Args:
         samples: Generated samples tensor with shape (num_samples, C, H, W).
@@ -83,7 +84,22 @@ def save_samples(
         if nrow * nrow < num_samples:
             nrow = math.ceil(num_samples / nrow)
 
-    save_image(samples, save_path, nrow=nrow)
+    save_image(samples, save_path, nrow=nrow, padding=0)
+
+
+def save_single_image(sample: torch.Tensor, save_path: str) -> None:
+    """
+    Save a single sample as a clean PNG (no grid padding).
+
+    Args:
+        sample: Tensor of shape (C, H, W) in model range [-1, 1].
+        save_path: File path to save the image.
+    """
+    img_tensor = sample.detach().cpu()
+    img_tensor = unnormalize(img_tensor).clamp(0.0, 1.0)
+    # Convert to uint8 [0, 255]
+    img_np = (img_tensor.permute(1, 2, 0).numpy() * 255).round().astype("uint8")
+    PILImage.fromarray(img_np).save(save_path)
 
 
 def main():
@@ -147,8 +163,19 @@ def main():
     
     # Apply EMA weights
     if not args.no_ema:
-        print("Using EMA weights")
-        ema.apply_shadow()
+        # Diagnostic: confirm EMA actually ran during training and differs from raw weights
+        ema_step = ema.step
+        raw_to_ema_diff = sum(
+            (ema.shadow[n] - p.data).pow(2).sum().item()
+            for n, p in model.named_parameters() if n in ema.shadow
+        ) ** 0.5
+        print(f"Using EMA weights  (EMA step={ema_step}, L2 diff from raw weights={raw_to_ema_diff:.4f})")
+        if ema_step < 1000:
+            print(f"WARNING: EMA step={ema_step} is very low — EMA shadow = initial/untrained weights!")
+            print("         Falling back to raw training weights (same as --no_ema).")
+            print("         To suppress this, re-train with ema.update() properly called each step.")
+        else:
+            ema.apply_shadow()
     else:
         print("Using training weights (no EMA)")
     
@@ -204,6 +231,14 @@ def main():
                 # TODO: add your arugments here
             )
 
+            # Diagnostic: print raw output range once to detect clipping issues
+            if sample_idx == 0:
+                s_min = samples.min().item()
+                s_max = samples.max().item()
+                frac_clipped = ((samples < -1) | (samples > 1)).float().mean().item()
+                print(f"[Diagnostic] Raw sample range: [{s_min:.3f}, {s_max:.3f}]  "
+                      f"({frac_clipped*100:.1f}% pixels outside [-1,1] will be clipped)")
+
             # Decode latents through VAE if needed
             if vae is not None:
                 with torch.no_grad():
@@ -216,7 +251,7 @@ def main():
             else:
                 for i in range(samples.shape[0]):
                     img_path = os.path.join(args.output_dir, f"{sample_idx:06d}.png")
-                    save_samples(samples[i:i+1], img_path, 1)
+                    save_single_image(samples[i], img_path)
                     sample_idx += 1
 
             remaining -= batch_size
@@ -233,7 +268,7 @@ def main():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             args.output = f"samples_{timestamp}.png"
 
-        save_samples(all_samples, args.output, args.num_samples, nrow=8)
+        save_grid(all_samples, args.output, args.num_samples, nrow=8)
         print(f"Saved grid to {args.output}")
     else:
         print(f"Saved {args.num_samples} individual images to {args.output_dir}")

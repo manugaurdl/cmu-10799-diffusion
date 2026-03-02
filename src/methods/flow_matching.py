@@ -85,28 +85,27 @@ class FlowMatching(BaseMethod):
         """
         self.eval_mode()
         if steps is None:
-            steps = self.num_inference_steps
+            steps = kwargs.get("num_steps", self.num_inference_steps)
             
         # 1. Start from pure noise at t=0
         x = torch.randn((batch_size, *image_shape), device=self.device)
         
         # 2. Setup time grid
         # We go from 0 to 1
-        times = torch.linspace(0, 1, steps + 1, device=self.device)
         dt = 1.0 / steps
+        times = torch.linspace(0, 1 - dt, steps, device=self.device)
 
         # 3. Euler Integration Loop
-        for i in range(steps):
-            # Current time t
-            t_curr = times[i]
-            
-            # Broadcast t for the batch
-            t_batch = torch.full((batch_size,), t_curr, device=self.device)
+        for t_curr in times:
+            # Broadcast t for the batch: shape (batch_size,), dtype float32
+            t_batch = torch.full(
+                (batch_size,), t_curr.item(), device=self.device, dtype=torch.float32
+            )
             
             # Predict vector field v at current point
             v_pred = self.model(x, t_batch)
             
-            # Euler step: x_{t+1} = x_t + v(x_t, t) * dt
+            # Euler step: x_{t+dt} = x_t + v(x_t, t) * dt
             x = x + v_pred * dt
 
         return x

@@ -4,7 +4,7 @@ data:
   from_hub: false  # run "python download_dataset.py --output_dir YOUR_PATH" first if you want to use false here
   repo_name: "electronickale/cmu-10799-celeba64-subset"
   use_vae: false        # if true, load precomputed latents; else load raw images
-  image_size: 128         # pixel resolution (used for raw images or VAE decode output)
+  image_size: 64         # pixel resolution (used for raw images or VAE decode output)
   latent_size: 8         # spatial size of VAE latents (64 / 8 = 8)
   channels: 3            # latent channels when use_vae=true, else 3
   num_workers: 8
@@ -15,7 +15,7 @@ data:
 #   - set model.type: "dit" to train Flow Matching with Diffusion Transformer
 #   - set model.type: "unet" to use the original U-Net
 model:
-  type: dit #"dit"
+  type: unet #"dit"
 
   # DiT options:
   # Option A) preset variant from facebookresearch/DiT naming:
